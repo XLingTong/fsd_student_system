@@ -1,14 +1,13 @@
 import json
 import os
 import re
-import uuid
 import random
 from pathlib import Path
 
 # Class Definitions
 class Subject:
     def __init__(self, name):
-        self.id = str(uuid.uuid4())[:3]
+        self.id = name
         self.name = name
         self.mark = random.randint(25, 100)
         self.grade = self.assign_grade(self.mark)
