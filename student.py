@@ -1,10 +1,9 @@
 import json
+import os
 import re
 import uuid
 import random
 from pathlib import Path
-import tkinter as tk
-from tkinter import messagebox, simpledialog
 
 # Class Definitions
 class Subject:
@@ -24,14 +23,13 @@ class Subject:
             return 'C'
         elif mark >= 60:
             return 'D'
+        elif mark >= 50:
+            return 'E'
         else:
             return 'F'
     
 def register_student():
-    """注册新学生。"""
-    name = simpledialog.askstring("Register", "Enter your name:")
-    email = simpledialog.askstring("Register", "Enter your email:")
-    password = simpledialog.askstring("Register", "Enter your password:", show='*')
+    """注册新学生，同时生成一个唯一的ID。"""
     email = input("Enter email: ")
     if not validate_email(email):
         print("Invalid email format.")
@@ -40,12 +38,41 @@ def register_student():
     if not validate_password(password):
         print("Invalid password format.")
         return
-
-    # 检查学生是否已存在
     if student_exists(email):
         print("Student already registered.")
         return
-    messagebox.showinfo("Register", "Registration attempted for: " + name)
+    
+    # 假设每个学生的ID是学生列表长度加1
+    student = {
+        "id": generate_student_id(),
+        "name": input("Enter your name: "),
+        "email": email,
+        "password": password,
+        "subjects": []  # 初始化空的科目列表
+    }
+    save_student(student)
+    print("Student registered successfully.")
+
+def generate_student_id():
+    """生成唯一的学生ID。"""
+    try:
+        with open("students.data", "r") as file:
+            students = json.load(file)
+        return len(students) + 1
+    except (FileNotFoundError, json.JSONDecodeError):
+        return 1
+
+def save_student(student):
+    """将学生数据保存到文件。"""
+    try:
+        with open("students.data", "r") as file:
+            students = json.load(file)
+    except (json.JSONDecodeError, FileNotFoundError):
+        students = []
+
+    students.append(student)
+    with open("students.data", "w") as file:
+        json.dump(students, file, indent=4)
 
 def student_exists(email):
     """检查学生是否已在文件中注册。"""
@@ -53,34 +80,16 @@ def student_exists(email):
         with open("students.data", "r") as file:
             students = json.load(file)
         return any(student['email'] == email for student in students)
-    except json.JSONDecodeError:
-        return False  # 文件为空时返回False
-
-def save_student(student):
-    """将学生数据保存到文件。"""
-    try:
-        with open("students.data", "r") as file:
-            students = json.load(file)
-    except json.JSONDecodeError:
-        students = []
-
-    students.append({
-        "id": student.id,
-        "name": student.name,
-        "email": student.email,
-        "password": student.password,
-        "subjects": student.subjects
-    })
-    with open("students.data", "w") as file:
-        json.dump(students, file, indent=4)
+    except (json.JSONDecodeError, FileNotFoundError):
+        return False
 
 def validate_email(email):
     """验证电子邮件格式是否正确。"""
-    return re.match(r"[^@]+@[^@]+\.[^@]+", email)
+    return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
 
 def validate_password(password):
-    """验证密码是否以大写字母开头，后跟至少三个数字。"""
-    return re.match(r"[A-Z][a-zA-Z]{5,}[0-9]{3,}", password)
+    """验证密码格式。密码必须以大写字母开头，至少有6个字母，之后是至少三位数字。"""
+    return re.match(r"[A-Z][a-zA-Z]{5,}[0-9]{3,}$", password) is not None
 
 def update_student_data(student):
     """更新学生数据到文件。"""
@@ -92,8 +101,12 @@ def update_student_data(student):
 
 def login_student():
     """学生登录。"""
-    email = input("Enter email: ")
-    password = input("Enter password: ")
+    email = input("Enter your email: ")
+    password = input("Enter your password: ")
+    # 检查文件是否存在且不为空
+    if not os.path.exists("students.data") or os.path.getsize("students.data") == 0:
+        print("No registered students. Please register first.")
+        return
     # 从文件读取学生数据
     with open("students.data", "r") as file:
         students = json.load(file)
@@ -101,8 +114,7 @@ def login_student():
     student = next((s for s in students if s['email'] == email and s['password'] == password), None)
     if student:
         print("Login successful.")
-        # 登录后进入课程菜单
-        # student_course_menu(student)
+        student_course_menu(student)
     else:
         print("Invalid login credentials.")
 
@@ -123,11 +135,11 @@ def enrol_subject(student):
         return
     subject_name = input("Enter subject name: ")
     subject = {
-        "id": str(uuid.uuid4())[:3],
+        "id": subject_name,
         "name": subject_name,
         "mark": random.randint(25, 100)
     }
-    subject['grade'] = assign_grade(subject['mark'])
+    subject['grade'] = Subject.assign_grade(subject['mark'])
     student['subjects'].append(subject)
     update_student_data(student)
     print("Subject enrolled successfully.")
@@ -151,7 +163,6 @@ def clear_database():
     """清空数据文件。"""
     open("students.data", 'w').close()
     print("Database cleared.")
-    messagebox.showinfo("Clear Database", "Database has been cleared.")
 
 def group_students():
     """按成绩组织显示学生。"""
@@ -168,7 +179,6 @@ def group_students():
         print(f"Grade {grade}:")
         for student in students:
             print(f"  Student ID: {student['id']}, Name: {student['name']}")
-    messagebox.showinfo("Group Students", "Students have been grouped by grades.")
 
 def partition_students():
     """显示通过/未通过的学生分配。"""
@@ -182,7 +192,6 @@ def partition_students():
     print("Fail Students:")
     for student in fail_students:
         print(f"  ID: {student['id']}, Name: {student['name']}")
-    messagebox.showinfo("Partition Students", "Students have been partitioned into pass and fail.")
 
 def remove_student():
     """按ID移除学生。"""
@@ -193,15 +202,13 @@ def remove_student():
     with open("students.data", 'w') as file:
         json.dump(students, file)
     print("Student removed.")
-    messagebox.showinfo("Remove Student", "A student has been removed.")
-
+   
 def show_students():
     """显示文件中的所有学生。"""
     with open("students.data", 'r') as file:
         students = json.load(file)
     for student in students:
         print(f"ID: {student['id']}, Name: {student['name']}")
-    messagebox.showinfo("Show Students", "All students are displayed.")
 
 # Main Menu Functions
 def university_system_menu():
@@ -298,58 +305,3 @@ Path("students.data").touch()
 if __name__ == "__main__":
     university_system_menu()
 
-
-import tkinter as tk
-from tkinter import messagebox
-
-def show_admin_menu():
-    # 隐藏主界面
-    main_frame.pack_forget()
-    # 显示管理员菜单
-    admin_frame.pack()
-
-def show_student_menu():
-    # 隐藏主界面
-    main_frame.pack_forget()
-    # 显示学生菜单
-    student_frame.pack()
-
-def exit_application():
-    root.destroy()
-
-def back_to_main():
-    # 隐藏所有子界面
-    admin_frame.pack_forget()
-    student_frame.pack_forget()
-    # 显示主界面
-    main_frame.pack()
-
-root = tk.Tk()
-root.title("CLIUniApp GUI")
-
-# 主界面
-main_frame = tk.Frame(root)
-tk.Button(main_frame, text="Admin Menu", command=show_admin_menu).pack(side=tk.TOP, fill=tk.X)
-tk.Button(main_frame, text="Student Menu", command=show_student_menu).pack(side=tk.TOP, fill=tk.X)
-tk.Button(main_frame, text="Exit", command=exit_application).pack(side=tk.TOP, fill=tk.X)
-main_frame.pack()
-
-# 管理员界面
-admin_frame = tk.Frame(root)
-tk.Label(admin_frame, text="Admin Menu").pack(side=tk.TOP, fill=tk.X)
-tk.Button(admin_frame, text="Clear Database", command=clear_database).pack(side=tk.TOP, fill=tk.X)
-tk.Button(admin_frame, text="Group Students", command=group_students).pack(side=tk.TOP, fill=tk.X)
-tk.Button(admin_frame, text="Partition Students", command=partition_students).pack(side=tk.TOP, fill=tk.X)
-tk.Button(admin_frame, text="Remove a Student", command=remove_student).pack(side=tk.TOP, fill=tk.X)
-tk.Button(admin_frame, text="Show Students", command=show_students).pack(side=tk.TOP, fill=tk.X)
-tk.Button(admin_frame, text="Back", command=back_to_main).pack(side=tk.BOTTOM, fill=tk.X)
-
-
-# 学生界面
-student_frame = tk.Frame(root)
-tk.Label(student_frame, text="Student Menu").pack(side=tk.TOP, fill=tk.X)
-tk.Button(student_frame, text="Login", command=login_student).pack(side=tk.TOP, fill=tk.X)
-tk.Button(student_frame, text="Register", command=register_student).pack(side=tk.TOP, fill=tk.X)
-tk.Button(student_frame, text="Back", command=back_to_main).pack(side=tk.BOTTOM, fill=tk.X)
-
-root.mainloop()
